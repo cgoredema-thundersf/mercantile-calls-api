@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<flow name="zoom-token-schedulerFlow" doc:id="43c52854-a57b-49cf-aff8-e9299c7f9e76" >
+		<scheduler doc:name="50 Min Token Scheduler" doc:id="5c737dfc-4acd-4531-8563-c503e2c951ff" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="50" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<flow-ref doc:name="get-zoom-token" doc:id="d304c7c8-e135-48c4-9069-b4d072cb1e93" name="get-zoom-token"/>
+		<error-handler ref="Global_Error_Handler" />
+	</flow>
+	<flow name="zoom-callHistory-schedulerFlow" doc:id="ec27b771-acb1-4f8a-90e8-dedaa3d55aa1" maxConcurrency="1">
+		<scheduler doc:name="15-Minute Scheduler" doc:id="3daf166b-a6a4-4ec6-93e7-744be151408e" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="900" startDelay="5" timeUnit="SECONDS" />
+			</scheduling-strategy>
+		</scheduler>
+		<flow-ref doc:name="callHistory-extract-flow" doc:id="7f0b702d-eb9c-4fe4-a3f3-5f73e1de7a59" name="callHistory-extract-flow"/>
+		<error-handler ref="Global_Error_Handler" />
+	</flow>
+</mule>

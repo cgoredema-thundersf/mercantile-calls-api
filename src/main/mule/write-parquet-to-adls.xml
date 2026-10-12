@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns:parquet="http://www.mulesoft.org/schema/mule/parquet"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/parquet http://www.mulesoft.org/schema/mule/parquet/current/mule-parquet.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd">
+	<sub-flow name="write-parquet-to-adls" doc:id="d599be35-8499-4e66-bce3-68bee9f4cc6a" >
+		<set-variable value='#[(vars.landingFolder as String) ++ "_" ++ correlationId ++ ".parquet"]' doc:name="Set File Name" doc:id="d1032520-d4bc-4df5-a725-7edbb8f31ab9" variableName="fileName"/>
+		<set-variable value='#[(Mule::p("sftp.basePath") as String) ++ "/" ++ (vars.fileName as String)]' doc:name="Set Remote Path" doc:id="ed00044a-6626-4c36-8134-5ab40136d03c" variableName="remotePath"/>
+		<!-- [STUDIO:"Convert to Parquet"]<parquet:write-avro-to-parquet-stream doc:name="Convert to Parquet" doc:id="45bc92fb-c23d-4be0-82dc-3723d1b0e820" /> [STUDIO] -->
+		<!-- [STUDIO:"Upload to ADLS"]<sftp:write doc:name="Upload to ADLS" doc:id="edf123f6-ebbf-4c79-8801-14a69910b21f" config-ref="ADLS_SFTP_Config" path="#[vars.remotePath&#93;"/> [STUDIO] -->
+		<!-- [STUDIO:"Log Landed"]<logger level="INFO" doc:name="Log Landed" doc:id="0e0ed205-8f2e-48c2-913a-5d4ca39fe6fe" message='#["Landed " ++ vars.fileName ++ " at " ++ vars.remotePath&#93;'/> [STUDIO] -->
+		<parquet:write-avro-to-parquet doc:name="Write Avro to Parquet - File" doc:id="82b29797-72ea-4087-affd-66d75aaf31d0" parquetFilePath='#["D:/batch_" ++ vars.correlationId ++ ".parquet"]'/>
+	</sub-flow>
+</mule>

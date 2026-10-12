@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<sub-flow name="get-zoom-token" doc:id="c15344d8-e40c-422c-99c1-93c99c25c794" >
+		<ee:transform doc:name="Transform Message" doc:id="cfa9a28b-e1b7-4310-a369-d9d87646a186" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/x-www-form-urlencoded
+---
+{
+	"grant_type": "account_credentials",
+	"account_id": Mule::p('secure::zoom.accountId')
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Request" doc:id="f3ff0167-f186-4dba-87a5-737f21e8f664" config-ref="Zoom_Auth_Server_Config" path="/oauth/token" >
+			<http:headers ><![CDATA[#[output application/java
+import toBase64 from dw::core::Binaries
+---
+{
+    "Authorization": "Basic " ++ toBase64(Mule::p('secure::zoom.clientId') ++ ":" ++ Mule::p('secure::zoom.clientSecret'))
+}]]]></http:headers>
+		</http:request>
+		<os:store doc:name="Cache Token" doc:id="fd1ced87-6412-4a11-bb7f-409f464760fa" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" >
+			<os:value ><![CDATA[#[payload.access_token]]]></os:value>
+		</os:store>
+		<logger level="INFO" doc:name="Logger" doc:id="1d9f21f8-0ed2-4e98-b34a-5eb53cc915f2" message="Zoom access token refreshed and cached." />
+	</sub-flow>
+</mule>

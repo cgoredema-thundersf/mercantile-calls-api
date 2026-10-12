@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<error-handler name="Global_Error_Handler" doc:id="da88c40b-3797-4cac-b768-a7f16784b128" >
+		<!-- Transient: the next scheduled run retries the same window -->
+    <on-error-propagate enableNotifications="true" logException="true" doc:name="Transient Errors"
+        type="RETRY_EXHAUSTED, HTTP:TOO_MANY_REQUESTS, HTTP:INTERNAL_SERVER_ERROR, HTTP:BAD_GATEWAY, HTTP:SERVICE_UNAVAILABLE, HTTP:TIMEOUT, HTTP:CONNECTIVITY, SFTP:CONNECTIVITY">
+        <logger level="WARN" doc:name="Log Transient Error" message="#[output application/json --- {
+    timestamp: now(),
+    message: 'Transient error. Watermark not advanced; the same window will be retried on the next scheduled run.',
+    correlationId: vars.correlationId default correlationId,
+    errorType: (error.errorType.namespace default '') ++ ':' ++ (error.errorType.identifier default ''),
+    description: error.description,
+    failedWindowStart: vars.lastRunTime default ''
+}]"/>
+    </on-error-propagate>
+
+    <!-- Non-retryable: needs investigation -->
+    <on-error-propagate enableNotifications="true" logException="true" doc:name="Non-Retryable Errors" type="ANY">
+        <logger level="ERROR" doc:name="Log Non-Retryable Error" message="#[output application/json --- {
+    timestamp: now(),
+    message: 'Non-retryable error. Watermark not advanced; the run will repeat and fail until the cause is fixed.',
+    correlationId: vars.correlationId default correlationId,
+    errorType: (error.errorType.namespace default '') ++ ':' ++ (error.errorType.identifier default ''),
+    description: error.description,
+    failedWindowStart: vars.lastRunTime default ''
+}]"/>
+        <!-- TODO (TDD 6.6): publish error details to the Anypoint MQ dead-letter queue and send a notification -->
+    </on-error-propagate>
+	</error-handler>
+</mule>

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" 
+	xmlns:parquet="http://www.mulesoft.org/schema/mule/parquet"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/parquet http://www.mulesoft.org/schema/mule/parquet/current/mule-parquet.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+
+	<!-- Main Orchestration Ingestion Conduit Flow -->
+
+	<sub-flow name="callHistory-extract-flow" doc:id="8b9f30da-ac6c-4c69-a47e-53941a2ac1a9" >
+		<os:retrieve doc:name="Get Cached Token" doc:id="12feb45d-f898-48ec-a265-d5bf9d1e9d54" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken">
+			<os:default-value><![CDATA[#[""]]]></os:default-value>
+		</os:retrieve>
+		<choice doc:name="Token Missing?" doc:id="affbc9e0-b26f-47bc-9ea0-82a2957c13da">
+			<when expression="#[isEmpty(vars.zoomAuthToken)]">
+				<flow-ref doc:name="get-zoom-token" doc:id="2ada6983-bf36-4c88-8c65-0fc49d4cc878" name="get-zoom-token" />
+				<os:retrieve doc:name="Reload Token" doc:id="444d75c4-8eef-4fea-9f5c-6e18b82422e5" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken" />
+			</when>
+		</choice>
+		<set-variable value="#[correlationId]" doc:name="Set Correlation Id" doc:id="a051abb8-3619-4362-acd0-81191bb4b7ec" variableName="correlationId" />
+		<os:retrieve doc:name="Fetch Last Successful Run Time" doc:id="8161c13f-f563-44cf-bc29-0538ce1beb72" key="last_successful_run_time" objectStore="Watermark_OS" target="lastRunTime" config-ref="OS_Watermark">
+			<os:default-value><![CDATA[#[Mule::p('zoom.callHistory.initialFrom')]]]></os:default-value>
+
+		</os:retrieve>
+		<ee:transform doc:name="Init Run Window" doc:id="a5ce3350-abfa-4875-928f-578051d96515" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="endTime" ><![CDATA[%dw 2.0
+output application/java
+var fmt = Mule::p('zoom.callHistory.dateFormat')
+var lag = ("PT" ++ Mule::p('zoom.callHistory.safetyLagMinutes') ++ "M") as Period
+var maxWindow = ("P" ++ (Mule::p('zoom.callHistory.maxWindowDays') default "1") ++ "D") as Period
+var nowWithLag = (now() >> "UTC") - lag
+var maxEnd = ((vars.lastRunTime as DateTime) >> "UTC") + maxWindow
+---
+(if (maxEnd < nowWithLag) maxEnd else nowWithLag) as String {format: fmt}]]></ee:set-variable>
+				<ee:set-variable variableName="nextPageToken" ><![CDATA[%dw 2.0
+output application/java
+---
+""]]></ee:set-variable>
+				<ee:set-variable variableName="pageCount" ><![CDATA[%dw 2.0
+output application/java
+---
+0]]></ee:set-variable>
+				<ee:set-variable variableName="paginatedRecords" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Log Cycle Initialized" doc:id="07b0d6a7-524a-423e-b4bc-70882c74dd2f" message='#["Log cycle started from " ++ (vars.lastRunTime default "") ++ " to " ++ (vars.endTime default "")]' />
+		<flow-ref doc:name="callHistory-processing-flow" doc:id="dd5d3670-e7f6-48cb-87ee-b2cec11649ee" name="callHistory-processing-flow" />
+	</sub-flow>
+	<sub-flow name="callHistory-processing-flow" doc:id="8a929475-27fc-40d2-a8ef-84ce18971ac3" >
+		<flow-ref doc:name="callHistory-fetch-page" doc:id="716cb617-4ce0-467e-a9c4-02d7fdf7adce" name="callHistory-fetch-page"/>
+		<flow-ref doc:name="callHistory-collect-page" doc:id="2b846110-222b-4ae9-887e-cc00a2afaf41" name="callHistory-collect-page"/>
+		<set-variable value="#[(vars.zoomRawPayload.page_count default 1) as Number]" doc:name="Set Total Pages" doc:id="a1caec05-2813-4615-8649-34f8acc9dafb" variableName="totalPages"/>
+		<foreach doc:name="For Each Remaining Page" doc:id="63f37209-087f-4191-b51d-cb17e40a8073" collection="#[if (vars.totalPages &gt; 1) ((2 to vars.totalPages) map $) else []]">
+			<choice doc:name="Token Available?" doc:id="d3a46afe-119d-433a-8204-e6c02ff531ae" >
+				<when expression="#[!isEmpty(vars.nextPageToken)]">
+					<flow-ref doc:name="callHistory-fetch-page" doc:id="e6fe1e15-75dd-492c-b955-6a8ae37d9671" name="callHistory-fetch-page"/>
+					<flow-ref doc:name="callHistory-collect-page" doc:id="21064246-266a-4c8a-9672-6877d29e2ebf" name="callHistory-collect-page"/>
+				</when>
+			</choice>
+		</foreach>
+		<choice doc:name="Any Records In Window?" doc:id="576bf273-5b1c-4159-8478-778fb973c167" >
+			<when expression="#[sizeOf(vars.paginatedRecords) &gt; 0]">
+				<ee:transform doc:name="Transform Message" doc:id="d32174ca-d421-4b00-9425-9bdc337b804e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/avro schemaUrl="classpath://schema/history_schema.json"
+---
+vars.paginatedRecords]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="call_history" doc:name="Set Landing Folder" doc:id="c33fbdf4-cb17-47d5-8a69-8855116f428c" variableName="landingFolder"/>
+				<flow-ref doc:name="write-parquet-to-adls" doc:id="e55d0afa-ecfe-4efc-b124-80cafc825b15" name="write-parquet-to-adls"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="164bd7b2-95fd-45fc-b487-81e7bf702770" message="No call history records in this window. Skipping file write."/>
+			</otherwise>
+		</choice>
+		<os:store doc:name="Store" doc:id="47e95615-97ff-47dc-8df9-d58140b43d42" config-ref="OS_Watermark" key="last_successful_run_time" objectStore="Watermark_OS">
+			<os:value ><![CDATA[#[vars.endTime]]]></os:value>
+		</os:store>
+		<logger level="INFO" doc:name="Log End of Stream" doc:id="445b2945-ee89-447d-832b-8f47d4a74655" message='End of stream'/>
+	</sub-flow>
+	<sub-flow name="callHistory-fetch-page" doc:id="73a8f1b1-50d0-4e21-af0c-480fe84741e3" >
+		<http:request method="GET" doc:name="GET Call History" doc:id="d2db2a6e-f7d2-416d-bd67-b0e6d7572d77" config-ref="Zoom_System_API_Config" path="/phone/call_history" outputMimeType="application/json">
+				<http:body><![CDATA[#[null]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ (vars.zoomAuthToken default "")
+}]]]></http:headers>
+				<http:query-params><![CDATA[#[output application/java
+---
+{
+	"from": vars.lastRunTime,
+	"to": vars.endTime,
+	"time_type": "end_time",
+	"page_size": Mule::p('zoom.callHistory.pageSize') as Number,
+	"next_page_token": (vars.nextPageToken default "") as String
+}]]]></http:query-params>
+			</http:request>
+		<set-variable value="#[(vars.pageCount default 0) + 1]" doc:name="Increment Page Count" doc:id="5a9f5615-c66e-45f4-b9cb-ec407ee562d6" variableName="pageCount" />
+		<set-variable value="#[payload]" doc:name="Keep Raw Response" doc:id="16d2250e-5677-496e-ab5c-13ef7d3467ea" variableName="zoomRawPayload" />
+		<choice doc:name="First Page?" doc:id="d56cc017-28f3-46c7-a731-1bd54b887335" >
+			<when expression="#[vars.pageCount == 1]">
+				<set-variable value="#[(vars.zoomRawPayload.total_records default 0) as Number]" doc:name="Set Zoom Total Records" doc:id="7940b4af-aac8-44b1-8e53-7e098f6d964d" variableName="zoomTotalRecords"/>
+			</when>
+		</choice>
+		<set-variable value='#[vars.zoomRawPayload.next_page_token default ""]' doc:name="Set Next Page Token" doc:id="d8b91b85-9b0a-4224-a6ad-260ec60f3cda" variableName="nextPageToken"/>
+	</sub-flow>
+	<sub-flow name="callHistory-collect-page" doc:id="12508059-678e-4d40-8b73-9daff93e941b" >
+		<choice doc:name="Records On This Page?" doc:id="59586db9-c0e9-42cb-993b-195ae7b865ca" >
+			<when expression="#[!isEmpty(vars.zoomRawPayload.call_history)]">
+				<ee:transform doc:name="DataWeave 1:1 Schema Transform" doc:id="38fd1062-ec29-45eb-9a68-d9f5ef3daffd" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+((vars.zoomRawPayload.call_history default []) as Array) map (log) -> {
+    call_history_id: log.call_history_uuid,
+    call_id: log.call_id,
+    direction: log.direction,
+    caller_name: log.caller_name,
+    caller_number: log.caller_did_number,
+    callee_name: log.callee_name,
+    callee_number: log.callee_did_number,
+    callee_extension_type: log.callee_ext_type,
+    department: log.department,
+    cost_center: log.cost_center,
+    site_id: log.site_id,
+    site_name: log.site_name,
+    start_time: log.start_time,
+    end_time: log.end_time,
+    duration_seconds: log.duration as Number default 0,
+    call_result: log.call_result
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="#[(vars.paginatedRecords default []) ++ (payload as Array)]" doc:name="Append Page" doc:id="a8b52980-c686-425b-bb92-7482ce0ad11c" variableName="paginatedRecords" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Log Empty Page" doc:id="a7782d00-c2d9-49ca-a7ee-e4912824dd73" message="Page returned no call history records."/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+
+
+</mule>

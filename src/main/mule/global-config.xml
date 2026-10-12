@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd">
+	<http:request-config name="Zoom_System_API_Config" doc:name="HTTP Request configuration" basePath="${zoom.api.basePath}" responseTimeout="120000">
+		<http:request-connection host="${zoom.api.host}" protocol="HTTPS">
+		</http:request-connection>
+</http:request-config>
+	
+	<configuration-properties doc:name="Configuration properties" doc:id="2cff16a7-3aba-419f-9d37-72179b41e36e" file="config/${mule.env}.properties" />
+	<os:config name="OS_Watermark" doc:name="ObjectStore Config" doc:id="45da35aa-07be-424a-bb11-567baa637fc1" >
+		<os:connection />
+	</os:config>
+	<os:object-store name="Watermark_OS" doc:name="Object store" doc:id="312ee876-e196-4e4d-9be3-fa2a36705962" entryTtl="30" entryTtlUnit="DAYS" expirationIntervalUnit="DAYS" config-ref="OS_Watermark"/>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="4ee10613-d106-46c1-a311-8ecd422281c3" file="config/${mule.env}-secure.properties" key="${zoom.key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<os:object-store name="Token_OS" doc:name="Object store" doc:id="e582c62e-89d0-4351-9547-0e9aeef7cb35" persistent="false" entryTtl="55" entryTtlUnit="MINUTES" config-ref="OS_Watermark"/>
+	<http:request-config name="Zoom_Auth_Server_Config" doc:name="HTTP Request configuration" doc:id="030a9a37-8c2a-43b9-8801-3e5b80429b42" responseTimeout="30000">
+		<http:request-connection host="${zoom.auth.host}" protocol="HTTPS"/>
+	</http:request-config>
+	<sftp:config name="ADLS_SFTP_Config" doc:name="SFTP Config" doc:id="42f2d2cf-fdff-46cf-99c7-fb2e4ef93463" >
+		<sftp:connection host="${sftp.host}" username="${sftp.username}" identityFile="${sftp.identityFile}" port="${sftp.port}" connectionTimeout="30" workingDir="/">
+			<reconnection >
+				<reconnect frequency="5000" count="3" />
+			</reconnection>
+			<sftp:preferred-authentication-methods>
+				<sftp:preferred-authentication-method value="PUBLIC_KEY" />
+			</sftp:preferred-authentication-methods>
+		</sftp:connection>
+	</sftp:config>
+	<global-property doc:name="Global Property" doc:id="4b1f432c-20cf-4bbb-971c-5d254eab6aa0" name="mule.env" value="dev" />
+	<global-property doc:name="Global Property" doc:id="ed1fcb06-4e71-4cb9-9932-f1bf75d78ebb" name="zoom.key" value="muleDevZoomKey" />
+</mule>
