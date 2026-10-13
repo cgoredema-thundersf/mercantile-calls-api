@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<sub-flow name="callPath-extract-flow" doc:name="callPath-batch-trigger">
+		<set-variable doc:name="Set Run ID" variableName="runId"
+			value="#[vars.correlationId default correlationId]"/>
+		<ee:transform doc:name="Call IDs for the run">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+(vars.paginatedRecords default []) map { call_history_id: $.call_history_id }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Run call path batch" name="callPath-batch-flow"/>
+	</sub-flow>
+ 
+	<flow name="callPath-batch-flow" doc:name="callPath-batch-flow">
+		<!-- maxConcurrency 2 = at most 2 Zoom calls in parallel (rate limits) -->
+		<batch:job jobName="callPath-batch-job" doc:name="Call path batch"
+			maxFailedRecords="-1" blockSize="50" maxConcurrency="2">
+			<batch:process-records>
+ 
+				<!-- STEP 1: fetch + map one call -->
+				<batch:step name="fetch-and-map-call-path">
+					<set-variable doc:name="Set Target Call History ID" variableName="targetCallHistoryUuid"
+						value="#[payload.call_history_id]"/>
+ 
+					<flow-ref doc:name="Fetch call path" name="zoom-phone-callpath-fetch-sub-flow"/>
+ 
+					<!-- 404 = this record fails (captured in step 2), others continue -->
+					<choice doc:name="Found?">
+						<when expression="#[attributes.statusCode == 404]">
+							<raise-error type="APP:CALL_PATH_NOT_FOUND"
+								description="#['Zoom returned 404 for ' ++ (vars.targetCallHistoryUuid default 'null')]"/>
+						</when>
+					</choice>
+ 
+					<ee:transform doc:name="Map legs (path_schema.json fields)">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+var str = (v) -> if (v == null) null else (v as String)
+var lng = (v) -> if (v == null) null else floor(v as Number)
+---
+((payload.call_elements default []) as Array) map (leg) -> {
+    call_leg_id: str(leg.call_element_id default
+        ((leg.call_id default "") ++ "_" ++
+         ((leg.node default "") as String) ++ "_" ++
+         ((leg.segment default "") as String))),
+    call_history_id: str(vars.targetCallHistoryUuid),
+    call_id: str(leg.call_id),
+    node: lng(leg.node),
+    segment: lng(leg.segment),
+    direction: str(leg.direction),
+    connect_type: str(leg.connect_type),
+    from_name: str(leg.caller_name),
+    from_email: str(leg.caller_email),
+    from_ext: str(leg.caller_ext_number),
+    from_phone_number: str(leg.caller_did_number),
+    to_name: str(leg.callee_name),
+    to_email: str(leg.callee_email),
+    to_ext: str(leg.callee_ext_number),
+    to_phone_number: str(leg.callee_did_number),
+    to_extension_type: str(leg.callee_ext_type),
+    operator_name: str(leg.operator_name),
+    operator_ext: str(leg.operator_ext_number),
+    operator_ext_type: str(leg.operator_ext_type),
+    start_time: str(leg.start_time),
+    answer_time: str(leg.answer_time),
+    end_time: str(leg.end_time),
+    event: str(leg.event),
+    call_result: str(leg.result),
+    result_reason: str(leg.result_reason),
+    wait_time: lng(leg.wait_time),
+    talk_time: lng(leg.talk_time),
+    hold_time: lng(leg.hold_time),
+    device: str(leg.callee_device_type),
+    caller_device: str(leg.caller_device_type),
+    site: str(leg.site_name),
+    site_id: str(leg.site_id),
+    department: str(leg.department),
+    cost_center: str(leg.cost_center),
+    recording_id: str(leg.recording_id),
+    recording_type: str(leg.recording_type),
+    ivr_key_press: str(leg.press_key)
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+ 
+					<!-- Runs ONCE after all records: all successful records' legs together -->
+					<batch:aggregator doc:name="Write one call_path file" streaming="true">
+						<ee:transform doc:name="Flatten all legs">
+							<ee:variables>
+								<ee:set-variable variableName="allLegs"><![CDATA[%dw 2.0
+output application/java
+---
+flatten(payload)]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<choice doc:name="Any legs?">
+							<when expression="#[not isEmpty(vars.allLegs)]">
+								<ee:transform doc:name="Legs to Avro">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/avro schemaUrl="classpath://schema/path_schema.json"
+---
+vars.allLegs]]></ee:set-payload>
+									</ee:message>
+								</ee:transform>
+								<set-variable doc:name="Set Landing Folder" variableName="landingFolder" value="call_path"/>
+								<!-- VERIFY: runId is the flow var set before the job. If it is null
+								     in your runtime, the writer falls back to correlationId. -->
+								<set-variable doc:name="Set File Batch ID" variableName="fileBatchId"
+									value="#[vars.runId default correlationId]"/>
+								<flow-ref doc:name="write-parquet-to-adls" name="write-parquet-to-adls"/>
+								<logger level="INFO" doc:name="Log write"
+									message="#['call_path file written, legs=' ++ (sizeOf(vars.allLegs) as String)]"/>
+							</when>
+							<otherwise>
+								<logger level="WARN" doc:name="Nothing to write"
+									message="call_path: no legs collected in this run, no file written"/>
+							</otherwise>
+						</choice>
+					</batch:aggregator>
+				</batch:step>
+ 
+				<!-- STEP 2: only failed records -> log + DLQ for replay -->
+				<batch:step name="capture-failures" acceptPolicy="ONLY_FAILURES">
+					<logger level="ERROR" doc:name="Log failed call"
+						message="#['call_path FAILED for call_history_id=' ++ ((vars.targetCallHistoryUuid default payload.call_history_id) default 'unknown')]"/>
+					<vm:publish doc:name="Publish to DLQ" config-ref="VM_Config" queueName="callPathDLQ">
+						<vm:content><![CDATA[#[output application/json --- {
+    call_history_id: vars.targetCallHistoryUuid default payload.call_history_id,
+    runId: vars.runId,
+    failedAt: now() >> "UTC"
+}]]]></vm:content>
+					</vm:publish>
+				</batch:step>
+ 
+			</batch:process-records>
+ 
+			<!-- Reconciliation (TDD 9.2) -->
+			<batch:on-complete>
+				<logger level="INFO" doc:name="Batch summary"
+					message="#[output application/json --- {
+						event: 'callPath_batch_completed',
+						batchJobInstanceId: payload.batchJobInstanceId,
+						totalCalls: payload.totalRecords,
+						successfulCalls: payload.successfulRecords,
+						failedCalls: payload.failedRecords,
+						elapsedSeconds: (payload.elapsedTimeInMillis default 0) / 1000
+					}]"/>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+	
+	<sub-flow name="zoom-phone-callpath-fetch-sub-flow" doc:name="zoom-phone-callpath-fetch-sub-flow">
+		<until-successful doc:name="Retry transient errors" maxRetries="3" millisBetweenRetries="5000">
+			<flow-ref doc:name="ensure-zoom-token" name="ensure-zoom-token"/>
+			<http:request method="GET" doc:name="GET call path" config-ref="Zoom_System_API_Config"
+				path="/phone/call_history/{callHistoryUuid}" outputMimeType="application/json">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ (vars.zoomAuthToken as String)
+}]]]></http:headers>
+				<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"callHistoryUuid" : vars.targetCallHistoryUuid
+}]]]></http:uri-params>
+				<http:response-validator>
+					<http:success-status-code-validator values="200,404"/>
+				</http:response-validator>
+			</http:request>
+		</until-successful>
+	</sub-flow>
+ 
+</mule>

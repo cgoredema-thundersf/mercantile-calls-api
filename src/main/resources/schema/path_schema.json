@@ -1,10 +1,18 @@
 {
   "type": "record",
-  "name": "CallPath",
-  "namespace": "com.mercantile.zoom.fabric",
+  "name": "call_path",
+  "namespace": "com.mercantile.zoom",
   "fields": [
     {
       "name": "call_leg_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "call_history_id",
       "type": [
         "null",
         "string"
@@ -23,7 +31,7 @@
       "name": "node",
       "type": [
         "null",
-        "string"
+        "long"
       ],
       "default": null
     },
@@ -31,12 +39,12 @@
       "name": "segment",
       "type": [
         "null",
-        "string"
+        "long"
       ],
       "default": null
     },
     {
-      "name": "event",
+      "name": "direction",
       "type": [
         "null",
         "string"
@@ -44,7 +52,79 @@
       "default": null
     },
     {
-      "name": "result",
+      "name": "connect_type",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "from_name",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "from_email",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "from_ext",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "from_phone_number",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_name",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_email",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_ext",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_phone_number",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_extension_type",
       "type": [
         "null",
         "string"
@@ -60,7 +140,7 @@
       "default": null
     },
     {
-      "name": "operator_extension",
+      "name": "operator_ext",
       "type": [
         "null",
         "string"
@@ -68,7 +148,7 @@
       "default": null
     },
     {
-      "name": "operator_extension_type",
+      "name": "operator_ext_type",
       "type": [
         "null",
         "string"
@@ -76,18 +156,122 @@
       "default": null
     },
     {
-      "name": "wait_time_seconds",
+      "name": "start_time",
       "type": [
         "null",
-        "double"
+        "string"
       ],
       "default": null
     },
     {
-      "name": "hold_time_seconds",
+      "name": "answer_time",
       "type": [
         "null",
-        "double"
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "end_time",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "event",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "call_result",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "result_reason",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "wait_time",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "talk_time",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "hold_time",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "device",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "caller_device",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "site",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "site_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "department",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "cost_center",
+      "type": [
+        "null",
+        "string"
       ],
       "default": null
     },

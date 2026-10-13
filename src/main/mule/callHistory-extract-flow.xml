@@ -1,28 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking"
-	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" 
-	xmlns:parquet="http://www.mulesoft.org/schema/mule/parquet"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" 
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns:parquet="http://www.mulesoft.org/schema/mule/parquet" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
 		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
 		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 		http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
 http://www.mulesoft.org/schema/mule/parquet http://www.mulesoft.org/schema/mule/parquet/current/mule-parquet.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
-http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
 
 	<!-- Main Orchestration Ingestion Conduit Flow -->
 
 	<sub-flow name="callHistory-extract-flow" doc:id="8b9f30da-ac6c-4c69-a47e-53941a2ac1a9" >
-		<os:retrieve doc:name="Get Cached Token" doc:id="12feb45d-f898-48ec-a265-d5bf9d1e9d54" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken">
-			<os:default-value><![CDATA[#[""]]]></os:default-value>
-		</os:retrieve>
-		<choice doc:name="Token Missing?" doc:id="affbc9e0-b26f-47bc-9ea0-82a2957c13da">
-			<when expression="#[isEmpty(vars.zoomAuthToken)]">
-				<flow-ref doc:name="get-zoom-token" doc:id="2ada6983-bf36-4c88-8c65-0fc49d4cc878" name="get-zoom-token" />
-				<os:retrieve doc:name="Reload Token" doc:id="444d75c4-8eef-4fea-9f5c-6e18b82422e5" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken" />
-			</when>
-		</choice>
+		<flow-ref doc:name="ensure-zoom-token" doc:id="66db1fce-a675-400e-8b3f-cd9ae1f48cce" name="ensure-zoom-token"/>
 		<set-variable value="#[correlationId]" doc:name="Set Correlation Id" doc:id="a051abb8-3619-4362-acd0-81191bb4b7ec" variableName="correlationId" />
 		<os:retrieve doc:name="Fetch Last Successful Run Time" doc:id="8161c13f-f563-44cf-bc29-0538ce1beb72" key="last_successful_run_time" objectStore="Watermark_OS" target="lastRunTime" config-ref="OS_Watermark">
 			<os:default-value><![CDATA[#[Mule::p('zoom.callHistory.initialFrom')]]]></os:default-value>
@@ -55,7 +48,7 @@ output application/java
 []]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<logger level="INFO" doc:name="Log Cycle Initialized" doc:id="07b0d6a7-524a-423e-b4bc-70882c74dd2f" message='#["Log cycle started from " ++ (vars.lastRunTime default "") ++ " to " ++ (vars.endTime default "")]' />
+		<logger level="INFO" doc:name="Log Cycle Initialized" doc:id="07b0d6a7-524a-423e-b4bc-70882c74dd2f" message='#[output application/json --- { event: "callHistory_run_started", correlationId: vars.correlationId default "", windowFrom: vars.lastRunTime default "", windowTo: vars.endTime default "" }]' />
 		<flow-ref doc:name="callHistory-processing-flow" doc:id="dd5d3670-e7f6-48cb-87ee-b2cec11649ee" name="callHistory-processing-flow" />
 	</sub-flow>
 	<sub-flow name="callHistory-processing-flow" doc:id="8a929475-27fc-40d2-a8ef-84ce18971ac3" >
@@ -82,6 +75,7 @@ vars.paginatedRecords]]></ee:set-payload>
 				</ee:transform>
 				<set-variable value="call_history" doc:name="Set Landing Folder" doc:id="c33fbdf4-cb17-47d5-8a69-8855116f428c" variableName="landingFolder"/>
 				<flow-ref doc:name="write-parquet-to-adls" doc:id="e55d0afa-ecfe-4efc-b124-80cafc825b15" name="write-parquet-to-adls"/>
+				<flow-ref doc:name="callPath-extract-flow" doc:id="b83cf5d2-2fca-4fc8-8956-635ca7521f18" name="callPath-extract-flow"/>
 			</when>
 			<otherwise >
 				<logger level="INFO" doc:name="Logger" doc:id="164bd7b2-95fd-45fc-b487-81e7bf702770" message="No call history records in this window. Skipping file write."/>
@@ -90,7 +84,7 @@ vars.paginatedRecords]]></ee:set-payload>
 		<os:store doc:name="Store" doc:id="47e95615-97ff-47dc-8df9-d58140b43d42" config-ref="OS_Watermark" key="last_successful_run_time" objectStore="Watermark_OS">
 			<os:value ><![CDATA[#[vars.endTime]]]></os:value>
 		</os:store>
-		<logger level="INFO" doc:name="Log End of Stream" doc:id="445b2945-ee89-447d-832b-8f47d4a74655" message='End of stream'/>
+		<logger level="INFO" doc:name="Log End of Stream" doc:id="445b2945-ee89-447d-832b-8f47d4a74655" message='#[output application/json --- {&#10;	event: "callHistory_run_completed",&#10;	correlationId: vars.correlationId default "",&#10;	windowFrom: vars.lastRunTime default "",&#10;	windowTo: vars.endTime default "",&#10;	pages: vars.pageCount default 0,&#10;	zoomTotalRecords: vars.zoomTotalRecords default 0,&#10;	recordsWritten: sizeOf(vars.paginatedRecords default []),&#10;	watermarkAdvancedTo: vars.endTime default ""&#10;}]'/>
 	</sub-flow>
 	<sub-flow name="callHistory-fetch-page" doc:id="73a8f1b1-50d0-4e21-af0c-480fe84741e3" >
 		<http:request method="GET" doc:name="GET Call History" doc:id="d2db2a6e-f7d2-416d-bd67-b0e6d7572d77" config-ref="Zoom_System_API_Config" path="/phone/call_history" outputMimeType="application/json">
@@ -98,7 +92,7 @@ vars.paginatedRecords]]></ee:set-payload>
 				<http:headers><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Bearer " ++ (vars.zoomAuthToken default "")
+	"Authorization" : "Bearer " ++ (vars.zoomAuthToken as String)
 }]]]></http:headers>
 				<http:query-params><![CDATA[#[output application/java
 ---
@@ -129,25 +123,39 @@ output application/java
 ---
 ((vars.zoomRawPayload.call_history default []) as Array) map (log) -> {
     call_history_id: log.call_history_uuid,
-    call_id: log.call_id,
     direction: log.direction,
-    caller_name: log.caller_name,
-    caller_number: log.caller_did_number,
-    callee_name: log.callee_name,
-    callee_number: log.callee_did_number,
-    callee_extension_type: log.callee_ext_type,
+    call_id: log.call_id,
+    from_name: log.caller_name,
+    from_email: log.caller_email,
+    from_ext: log.caller_ext_number,
+    from_phone_number: log.caller_did_number,
+    to_name: log.callee_name,
+    to_email: log.callee_email,
+    to_ext: log.callee_ext_number,
+    to_phone_number: log.callee_did_number,
+    start_time: log.start_time,
+    call_result: log.call_result,
+    duration: if (log.duration == null) null else (log.duration as Number),
+    site: log.site_name,
+    recorded: log.recording_status,
     department: log.department,
     cost_center: log.cost_center,
-    site_id: log.site_id,
-    site_name: log.site_name,
-    start_time: log.start_time,
+    connect_type: log.connect_type,
+    to_extension_type: log.callee_ext_type,
+    answer_time: log.answer_time,
     end_time: log.end_time,
-    duration_seconds: log.duration as Number default 0,
-    call_result: log.call_result
+    site_id: log.site_id
 }]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
 				<set-variable value="#[(vars.paginatedRecords default []) ++ (payload as Array)]" doc:name="Append Page" doc:id="a8b52980-c686-425b-bb92-7482ce0ad11c" variableName="paginatedRecords" />
+				<!-- [STUDIO:"For Each Log to Enrich"]<foreach doc:name="For Each Log to Enrich" doc:id="4ed7adb9-984f-4d16-83d0-d614251a7ab2" collection="#[payload&#93;">
+			<vm:publish doc:name="Publish to callPathRequests Queue" doc:id="a259ffb6-78ea-4b4b-a390-eea9cb7eb470" config-ref="VM_Config" queueName="callPathRequests" >
+						<vm:content ><![CDATA[#[output application/json &#45;&#45;- {
+	callHistoryRecords: vars.zoomRawPayload.call_history
+}&#93;&#93;&#93;></vm:content>
+					</vm:publish>
+		</foreach> [STUDIO] -->
 			</when>
 			<otherwise >
 				<logger level="INFO" doc:name="Log Empty Page" doc:id="a7782d00-c2d9-49ca-a7ee-e4912824dd73" message="Page returned no call history records."/>

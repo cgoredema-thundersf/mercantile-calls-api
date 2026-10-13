@@ -12,14 +12,6 @@
       "default": null
     },
     {
-      "name": "call_id",
-      "type": [
-        "null",
-        "string"
-      ],
-      "default": null
-    },
-    {
       "name": "direction",
       "type": [
         "null",
@@ -28,7 +20,7 @@
       "default": null
     },
     {
-      "name": "caller_name",
+      "name": "call_id",
       "type": [
         "null",
         "string"
@@ -36,7 +28,7 @@
       "default": null
     },
     {
-      "name": "caller_number",
+      "name": "from_name",
       "type": [
         "null",
         "string"
@@ -44,7 +36,7 @@
       "default": null
     },
     {
-      "name": "callee_name",
+      "name": "from_email",
       "type": [
         "null",
         "string"
@@ -52,7 +44,7 @@
       "default": null
     },
     {
-      "name": "callee_number",
+      "name": "from_ext",
       "type": [
         "null",
         "string"
@@ -60,7 +52,79 @@
       "default": null
     },
     {
-      "name": "callee_extension_type",
+      "name": "from_phone_number",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_name",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_email",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_ext",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "to_phone_number",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "start_time",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "call_result",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "duration",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "site",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "recorded",
       "type": [
         "null",
         "string"
@@ -84,7 +148,7 @@
       "default": null
     },
     {
-      "name": "site_id",
+      "name": "connect_type",
       "type": [
         "null",
         "string"
@@ -92,7 +156,7 @@
       "default": null
     },
     {
-      "name": "site_name",
+      "name": "to_extension_type",
       "type": [
         "null",
         "string"
@@ -100,7 +164,7 @@
       "default": null
     },
     {
-      "name": "start_time",
+      "name": "answer_time",
       "type": [
         "null",
         "string"
@@ -116,15 +180,7 @@
       "default": null
     },
     {
-      "name": "duration_seconds",
-      "type": [
-        "null",
-        "long"
-      ],
-      "default": null
-    },
-    {
-      "name": "call_result",
+      "name": "site_id",
       "type": [
         "null",
         "string"

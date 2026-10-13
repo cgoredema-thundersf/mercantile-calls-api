@@ -6,6 +6,17 @@
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<sub-flow name="ensure-zoom-token" doc:id="7ee7ccd7-83b8-4d55-8b3e-8d2859039345" >
+		<os:retrieve doc:name="Get Cached Token" doc:id="6e2e386b-985e-4ab2-852b-a9fbc9131fb1" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken" >
+			<os:default-value ><![CDATA[#[""]]]></os:default-value>
+		</os:retrieve>
+		<choice doc:name="Token Missing?" doc:id="d91d88db-ec65-435c-a1f5-8982d01338df" >
+			<when expression="#[isEmpty(vars.zoomAuthToken)]" >
+				<flow-ref doc:name="get-zoom-token" doc:id="f32c9bf2-cd50-40d6-bae0-b7f181af61db" name="get-zoom-token" />
+				<os:retrieve doc:name="Reload Token" doc:id="e00ae09a-3b5e-4539-8cba-3bda7e0c114c" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" target="zoomAuthToken" />
+			</when>
+		</choice>
+	</sub-flow>
 	<sub-flow name="get-zoom-token" doc:id="c15344d8-e40c-422c-99c1-93c99c25c794" >
 		<ee:transform doc:name="Transform Message" doc:id="cfa9a28b-e1b7-4310-a369-d9d87646a186" >
 			<ee:message >
@@ -23,7 +34,7 @@ output application/x-www-form-urlencoded
 import toBase64 from dw::core::Binaries
 ---
 {
-    "Authorization": "Basic " ++ toBase64(Mule::p('secure::zoom.clientId') ++ ":" ++ Mule::p('secure::zoom.clientSecret'))
+    "Authorization": "Basic " ++ toBase64((Mule::p('secure::zoom.clientId') ++ ":" ++ Mule::p('secure::zoom.clientSecret')) as Binary)
 }]]]></http:headers>
 		</http:request>
 		<os:store doc:name="Cache Token" doc:id="fd1ced87-6412-4a11-bb7f-409f464760fa" config-ref="OS_Watermark" key="zoom_active_token" objectStore="Token_OS" >
