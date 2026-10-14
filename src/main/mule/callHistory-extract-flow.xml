@@ -51,7 +51,7 @@ output application/java
 []]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<logger level="INFO" doc:name="Log Cycle Initialized" doc:id="07b0d6a7-524a-423e-b4bc-70882c74dd2f" message='#[output application/json --- { event: "callHistory_run_started", correlationId: vars.correlationId default "", windowFrom: vars.lastRunTime default "", windowTo: vars.endTime default "" }]' />
+		<logger level="INFO" doc:name="Logger" doc:id="07b0d6a7-524a-423e-b4bc-70882c74dd2f" message='#[output application/json --- { event: "callHistory_run_started", correlationId: vars.correlationId default "", windowFrom: vars.lastRunTime default "", windowTo: vars.endTime default "" }]' />
 		<flow-ref doc:name="callHistory-processing-flow" doc:id="dd5d3670-e7f6-48cb-87ee-b2cec11649ee" name="callHistory-processing-flow" />
 	</sub-flow>
 	<sub-flow name="callHistory-processing-flow" doc:id="8a929475-27fc-40d2-a8ef-84ce18971ac3" >
