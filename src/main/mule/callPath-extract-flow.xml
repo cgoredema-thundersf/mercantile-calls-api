@@ -14,7 +14,10 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 	<sub-flow name="callPath-extract-flow" doc:name="callPath-batch-trigger">
 		<set-variable doc:name="Set Run ID" variableName="runId"
 			value="#[vars.correlationId default correlationId]"/>
-		<ee:transform doc:name="Call IDs for the run">
+		<remove-variable doc:name="Remove zoomRawPayload" doc:id="4a1d2b17-c404-4829-a74d-86e978b4a195" variableName="zoomRawPayload"/>
+		<remove-variable doc:name="Remove nextPageToken" doc:id="28cb32ee-7d49-426e-879e-6681c0979389" variableName="nextPageToken"/>
+		<remove-variable doc:name="Remove totalPages" doc:id="dfd24f09-97a0-4336-8420-da924c61c9e4" variableName="totalPages"/>
+		<ee:transform doc:name="Extract Call History IDs Array">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 output application/java
@@ -22,13 +25,13 @@ output application/java
 (vars.paginatedRecords default []) map { call_history_id: $.call_history_id }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<flow-ref doc:name="Run call path batch" name="callPath-batch-flow"/>
+		<flow-ref doc:name="Trigger Call Path Batch" name="callPath-batch-flow"/>
 	</sub-flow>
  
 	<flow name="callPath-batch-flow" doc:name="callPath-batch-flow">
 		<!-- maxConcurrency 2 = at most 2 Zoom calls in parallel (rate limits) -->
 		<batch:job jobName="callPath-batch-job" doc:name="Call path batch"
-			maxFailedRecords="-1" blockSize="50" maxConcurrency="2">
+			maxFailedRecords="-1" blockSize="50" maxConcurrency="1">
 			<batch:process-records>
  
 				<!-- STEP 1: fetch + map one call -->
@@ -36,6 +39,15 @@ output application/java
 					<set-variable doc:name="Set Target Call History ID" variableName="targetCallHistoryUuid"
 						value="#[payload.call_history_id]"/>
  
+					<ee:transform doc:name="Transform Message" doc:id="2b7735a4-0383-47b5-9390-3bf39cd1802e" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+import wait from dw::Runtime
+---
+payload wait ((Mule::p('zoom.callPath.throttleMs') default "200") as Number)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
 					<flow-ref doc:name="Fetch call path" name="zoom-phone-callpath-fetch-sub-flow"/>
  
 					<!-- 404 = this record fails (captured in step 2), others continue -->
@@ -139,7 +151,7 @@ vars.allLegs]]></ee:set-payload>
 				<batch:step name="capture-failures" acceptPolicy="ONLY_FAILURES">
 					<logger level="ERROR" doc:name="Log failed call"
 						message="#['call_path FAILED for call_history_id=' ++ ((vars.targetCallHistoryUuid default payload.call_history_id) default 'unknown')]"/>
-					<vm:publish doc:name="Publish to DLQ" config-ref="VM_Config" queueName="callPathDLQ">
+					<vm:publish doc:name="Publish to DLQ" config-ref="VM_Config" queueName="callPathDlq">
 						<vm:content><![CDATA[#[output application/json --- {
     call_history_id: vars.targetCallHistoryUuid default payload.call_history_id,
     runId: vars.runId,
@@ -170,6 +182,7 @@ vars.allLegs]]></ee:set-payload>
 			<flow-ref doc:name="ensure-zoom-token" name="ensure-zoom-token"/>
 			<http:request method="GET" doc:name="GET call path" config-ref="Zoom_System_API_Config"
 				path="/phone/call_history/{callHistoryUuid}" outputMimeType="application/json">
+				<http:body ><![CDATA[#[null]]]></http:body>
 				<http:headers><![CDATA[#[output application/java
 ---
 {
@@ -184,7 +197,9 @@ vars.allLegs]]></ee:set-payload>
 					<http:success-status-code-validator values="200,404"/>
 				</http:response-validator>
 			</http:request>
-		</until-successful>
-	</sub-flow>
+		
+</until-successful>
+	
+</sub-flow>
  
 </mule>

@@ -27,13 +27,16 @@ http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/cu
 			<ee:variables >
 				<ee:set-variable variableName="endTime" ><![CDATA[%dw 2.0
 output application/java
+
 var fmt = Mule::p('zoom.callHistory.dateFormat')
 var lag = ("PT" ++ Mule::p('zoom.callHistory.safetyLagMinutes') ++ "M") as Period
-var maxWindow = ("P" ++ (Mule::p('zoom.callHistory.maxWindowDays') default "1") ++ "D") as Period
+var maxWindow = ("PT" ++ Mule::p('zoom.callHistory.maxWindowHours') ++ "H") as Period
 var nowWithLag = (now() >> "UTC") - lag
 var maxEnd = ((vars.lastRunTime as DateTime) >> "UTC") + maxWindow
+
 ---
-(if (maxEnd < nowWithLag) maxEnd else nowWithLag) as String {format: fmt}]]></ee:set-variable>
+(if (maxEnd < nowWithLag) maxEnd else nowWithLag)
+    as String {format: fmt}]]></ee:set-variable>
 				<ee:set-variable variableName="nextPageToken" ><![CDATA[%dw 2.0
 output application/java
 ---
@@ -97,8 +100,8 @@ vars.paginatedRecords]]></ee:set-payload>
 				<http:query-params><![CDATA[#[output application/java
 ---
 {
-	"from": vars.lastRunTime,
-	"to": vars.endTime,
+	"from": "2026-04-15T13:00:00Z",
+	"to": "2026-04-15T15:00:00Z",
 	"time_type": "end_time",
 	"page_size": Mule::p('zoom.callHistory.pageSize') as Number,
 	"next_page_token": (vars.nextPageToken default "") as String
@@ -108,7 +111,7 @@ vars.paginatedRecords]]></ee:set-payload>
 		<set-variable value="#[payload]" doc:name="Keep Raw Response" doc:id="16d2250e-5677-496e-ab5c-13ef7d3467ea" variableName="zoomRawPayload" />
 		<choice doc:name="First Page?" doc:id="d56cc017-28f3-46c7-a731-1bd54b887335" >
 			<when expression="#[vars.pageCount == 1]">
-				<set-variable value="#[(vars.zoomRawPayload.total_records default 0) as Number]" doc:name="Set Zoom Total Records" doc:id="7940b4af-aac8-44b1-8e53-7e098f6d964d" variableName="zoomTotalRecords"/>
+				<set-variable value="#[output application/java --- (vars.zoomRawPayload.total_records default 0) as Number]" doc:name="Set Zoom Total Records" doc:id="7940b4af-aac8-44b1-8e53-7e098f6d964d" variableName="zoomTotalRecords"/>
 			</when>
 		</choice>
 		<set-variable value='#[vars.zoomRawPayload.next_page_token default ""]' doc:name="Set Next Page Token" doc:id="d8b91b85-9b0a-4224-a6ad-260ec60f3cda" variableName="nextPageToken"/>
@@ -149,13 +152,6 @@ output application/java
 					</ee:message>
 				</ee:transform>
 				<set-variable value="#[(vars.paginatedRecords default []) ++ (payload as Array)]" doc:name="Append Page" doc:id="a8b52980-c686-425b-bb92-7482ce0ad11c" variableName="paginatedRecords" />
-				<!-- [STUDIO:"For Each Log to Enrich"]<foreach doc:name="For Each Log to Enrich" doc:id="4ed7adb9-984f-4d16-83d0-d614251a7ab2" collection="#[payload&#93;">
-			<vm:publish doc:name="Publish to callPathRequests Queue" doc:id="a259ffb6-78ea-4b4b-a390-eea9cb7eb470" config-ref="VM_Config" queueName="callPathRequests" >
-						<vm:content ><![CDATA[#[output application/json &#45;&#45;- {
-	callHistoryRecords: vars.zoomRawPayload.call_history
-}&#93;&#93;&#93;></vm:content>
-					</vm:publish>
-		</foreach> [STUDIO] -->
 			</when>
 			<otherwise >
 				<logger level="INFO" doc:name="Log Empty Page" doc:id="a7782d00-c2d9-49ca-a7ee-e4912824dd73" message="Page returned no call history records."/>
